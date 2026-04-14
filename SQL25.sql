@@ -992,6 +992,127 @@ select sqrt(25) --tagastab 5, võtab arvu ja leiab selle ruutjuure
 
 select rand() --tagastab juhusliku arvu vahemikus 0 kuni 1
 --oleks vaja, et iga kord annab rand meile ühe täisarvu vahemikus 1 kuni 100
+select ceiling (rand() * 100)
+
+--annab juhuslik number vahemikus 1 kuni 1000
+--ja teeb seda 10 korda, et näha erinevaid numbreid
+declare @counter int
+set @counter = 1
+while (@counter <= 10)
+begin
+	print ceiling (rand() * 1000)
+	set @counter = @counter + 1
+end
+
+select ROUND(850.556, 2) --ümardab 850.556 kahe komakohani, tagastab 850.56
+select ROUND(850.556, 2, 1) --ümardab 850.556 kahe komakohani, 
+--aga kui kolmas komakoht on 5 või suurem, siis ümardab alla, 
+--tagastab 850.550
+select ROUND(850.556, 1) --ümardab 850.556 ühe komakohani, tagastab 850.6
+select ROUND(850.556, 1, 1)--ümardab 850.556 ühe komakohani, 
+--aga kui kolmas komakoht on 5 või suurem, siis ümardab alla, tagastab 850.5
+select ROUND(850.556, -2)--ümardab 850.556 sadade kaupa, tagastab 900
+select ROUND(850.556, -1)--ümardab 850.556 kümnete kaupa, tagastab 850
+
+create function dbo.CalculateAge (@DOB date)
+returns int
+as begin
+declare @Age int
+
+set @Age = datediff(year, @DOB, getdate()) -
+	case 
+		when (month(@DOB) > month(getdate())) or
+			 (month(@DOB) = month(getdate()) and day(@DOB) > day(getdate())) 
+		then 1 
+		else 0
+		end
+	return @Age
+end
+-----
+execute CalculateAge '10/25/1980'
+
+--arvutab v'lja, kui vana on isik ja v]tab arvesse, 
+--kas isiku sünnipäev on juba sel aastal olnud või mitte
+--antud juhul näitab, kes on üle 40 aasta vanad
+select Id, dbo.CalculateAge(DateOfBirth) as Age from EmployeesWithDates
+where dbo.CalculateAge(DateOfBirth) > 40
+
+---inline table valued functions
+--teha EmployeesWithDates tabelisse
+--uus veerg nimega DepartmentId int,
+-- ja teine veerg on Gender nvarchar(10)
+
+update EmployeesWithDates set Gender = 'Male', DepartmentId = 1
+where Id = 1
+update EmployeesWithDates set Gender = 'Female', DepartmentId = 2
+where Id = 2
+update EmployeesWithDates set Gender = 'Male', DepartmentId = 1
+where Id = 3
+update EmployeesWithDates set Gender = 'Female', DepartmentId = 3
+where Id = 4
+insert into EmployeesWithDates (Id, Name, DateOfBirth, DepartmentId, Gender)
+values (5, 'Todd', '1978-11-29 12:59:30.670', 1, 'Male')
+
+select * from EmployeesWithDates
+
+--scalar function e skaleeritav funktsioon annab mingis vahemikus olevaid
+--väärtusi, aga inline table valued function tagastab tabeli
+--ja seal ei kasutata begin ja endi vahele kirjutamist, 
+--vaid lihtsalt kirjutad selecti
+create function fn_EmployeesByGender(@Gender nvarchar(10))
+returns table
+as
+return (select Id, Name, DateOfBirth, DepartmentId, Gender
+		from EmployeesWithDates
+		where Gender = @Gender)
+
+--soovime vaadata kõiki naisi EmployeesWithDates tabelist
+select * from fn_EmployeesByGender('Female')
+
+--soovin ainult näha Pam ja kasutan funktsiooni fn_EmployeesByGender
+select * from fn_EmployeesByGender('Female')
+where Name = 'Pam'
+
+--kahest erinevast tabelist andmete võtmine ja koos kuvamine
+--esimene on funktsioon ja teine on Department tabel
+select Name, Gender, DepartmentName
+from fn_EmployeesByGender('Male') E
+join Department D on D.Id = E.DepartmentId
+
+--inline funktsioon
+create function fn_GetEmployees()
+returns table as
+return (select Id, Name, cast(DateOfBirth as date)
+		as DOB
+		from EmployeesWithDates)
+
+select * from fn_GetEmployees()
 
 
+--multi statement table valued function
+create function fn_MS_GetEmployees()
+returns @Table Table (Id int, Name nvarchar(20), DOB date)
+as begin
+	insert into @Table
+	select Id, Name, cast(DateOfBirth as date) from EmployeesWithDates
 
+	return
+end
+
+select * from fn_MS_GetEmployees()
+
+--inline tabeli funktsioonid on paremini töötamas 
+--kuna käsitletakse vaatena
+--multi statement table valued funktsioonid on nagu tavalised funktsioonid,
+--pm on tegemist stored procedurega ja see võib olla aeglasem, 
+--sest see ei saa kasutada vaate optimeerimist e kulutab rohkem ressurssi
+select * from EmployeesWithDates
+update fn_GetEmployees() set Name = 'Sara' where Id = 4 --saab muuta andmeid
+select * from EmployeesWithDates
+update fn_MS_GetEmployees() set Name = 'Sara' where Id = 4 
+--ei saa muuta andmeid multistate table valued funktsioonis, 
+--sest see on nagu stored procedure
+
+--rida 1045
+--tund 7
+--21.04.26
