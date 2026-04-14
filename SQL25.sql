@@ -901,6 +901,62 @@ select year('03/29/2026') -- annab stringis oleva aasta nr
 
 --rida 841
 --tund 6
---
+--14.04.26
 
+select datename(day, '2026-04-07 12:00:05.056') --annab stringis oleva päeva nime
+select datename(weekday, '2026-04-07 12:00:05.056') --annab stringis oleva päeva nime
+select datename(month, '2026-04-07 12:00:05.056') -- annab stringis oleva kuu nime
+
+create table EmployeesWithDates
+(
+	Id nvarchar(2),
+	Name nvarchar(20),
+	DateOfBirth datetime
+)
+
+INSERT INTO EmployeesWithDates  (Id, Name, DateOfBirth)  
+VALUES (1, 'Sam', '1980-12-30 00:00:00.000');
+INSERT INTO EmployeesWithDates  (Id, Name, DateOfBirth)  
+VALUES (2, 'Pam', '1982-09-01 12:02:36.260');
+INSERT INTO EmployeesWithDates  (Id, Name, DateOfBirth)  
+VALUES (3, 'John', '1985-08-22 12:03:30.370');
+INSERT INTO EmployeesWithDates  (Id, Name, DateOfBirth)  
+VALUES (4, 'Sara', '1979-11-29 12:59:30.670');
+
+--kuidas võtta ühest veerust andmeid ja selle abil luua uued veerud
+select Name, DateOfBirth, Datename(weekday, DateOfBirth) as [Day],
+	   MONTH(DateOfBirth) as [Month], 
+	   DATENAME(month, DateOfBirth) as [MonthName],
+	   YEAR(DateOfBirth) as [Year]
+from EmployeesWithDates
+
+select DATEPART(weekday, '2026-04-07 12:00:05.056') -- annab stringis oleva päeva nr, kus 1 on pühapäev
+select DATEPART(month, '2026-04-07 12:00:05.056') -- annab stringis oleva kuu nr
+select DATENAME(week, '2026-04-07 12:00:05.056')
+select dateadd(day, 20, '2026-04-07 12:00:05.056') -- annab stringis oleva kuupäeva, mis on 20 päeva pärast
+select dateadd(day, -20, '2026-04-07 12:00:05.056') -- annab stringis oleva kuupäeva, mis on 20 päeva enne
+select datediff(month, '04/30/2025', '01/31/2026')
+select datediff(year, '04/30/2025', '01/31/2026')
+
+create function fnComputeAge(@DOB datetime)
+returns nvarchar(50)
+as begin
+	declare @tempdate datetime, @years int, @months int, @days int
+	select @tempdate = @DOB
+
+	select @years = datediff(year, @tempdate, getdate()) - case when (month(@DOB) > month(getdate())) or (month(@DOB))
+	= month(getdate()) and day(@DOB) > day(getdate()) then 1 else 0 end
+	select @tempdate = dateadd(year, @years, @tempdate)
+
+	select @months = datediff(month, @tempdate, getdate()) - case when day(@DOB) > day(getdate()) then 1 else 0 end
+	select @tempdate = dateadd(month, @months, @tempdate)
+
+	select @days = datediff(day, @tempdate, getdate())
+
+	declare @Age nvarchar(50)
+		set @Age = cast(@years as nvarchar(10)) + ' years, ' 
+		+ cast(@months as nvarchar(10)) + ' months, ' 
+		+ cast(@days as nvarchar(10)) + ' days old'
+	return @Age
+end
 
