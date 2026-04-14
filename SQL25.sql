@@ -960,3 +960,38 @@ as begin
 	return @Age
 end
 
+--saame vanuse välja arvutada, kui kasutame fnComputeAge funktsiooni
+select Name, DateOfBirth, dbo.fnComputeAge(DateOfBirth) as Age 
+from EmployeesWithDates
+
+--kui kasutame seda funktsiooni, siis saame teada tänase päeva vahet
+--stringis olevaga
+select dbo.fnComputeAge('03/23/2008')
+
+--nr peale DOB muutujat näitab, 
+--et missugusena järjestuses me tahame näidata veeru sisu
+select Id, Name, DateOfBirth,
+convert(nvarchar,DateOfBirth, 109) as ConvertedDOB
+from EmployeesWithDates
+
+select Id, Name, Name + ' - ' + cast(Id as nvarchar) as [Name-Id]
+from EmployeesWithDates
+
+select cast(getdate() as date) --tänane kp
+select convert(date, getdate()) --tänane kp
+
+---matemaatilised funktsioonid
+select abs(-101.5) --absoluutväärtus, tagastab 101.5
+select ceiling(101.5) --tagastab 102, ümardab üles
+select CEILING(-101.5) --tagastab -101, ümardab üles positiivsema nr poole
+select floor(101.5) --tagastab 101, ümardab alla
+select floor(-101.5) --tagastab -102, ümardab alla negatiivsema nr poole 
+select power(2, 4) -- 2 astmel 4 e 2x2x2x2, esimene nr on alus
+select SQUARE(5) -- tagastab 25, võtab arvu ja korrutab iseendaga
+select sqrt(25) --tagastab 5, võtab arvu ja leiab selle ruutjuure
+
+select rand() --tagastab juhusliku arvu vahemikus 0 kuni 1
+--oleks vaja, et iga kord annab rand meile ühe täisarvu vahemikus 1 kuni 100
+
+
+
