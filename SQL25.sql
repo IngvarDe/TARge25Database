@@ -1116,3 +1116,307 @@ update fn_MS_GetEmployees() set Name = 'Sara' where Id = 4
 --rida 1045
 --tund 7
 --21.04.26
+
+--determnistic vs nondeterministic functions
+select count(*) from EmployeesWithDates
+--kõik tehtemärgid on deterministic, sest nad annavad alati sama tulemuse, 
+--kui sisend on sama. Selle alla kuuluvad veel sum, avg, min, max, count
+select square(3)
+
+--mitte ettemääratud funktsioonid võivad anda erinevaid tulemusi
+select getdate() --kuna see annab alati jooksva aja, siis on nondeterministic
+select CURRENT_TIMESTAMP
+select rand()
+
+--loome funktsiooni
+create function fn_GetNameById(@id int)
+returns nvarchar(20)
+as begin
+	return (select Name from EmployeesWithDates where Id = @id)
+end
+
+--kuidas saab kasutada fn_GetNameById funktsiooni
+select dbo.fn_GetNameById(3)
+--sellega saab näha funktsiooni sisu
+sp_helptext fn_GetNameById
+
+--muuta funktsiooni fn_GetNameById ja krüpteerida see ära, 
+--et keegi teine peale sinu ei saaks seda muuta
+alter function fn_GetNameById(@id int)
+returns nvarchar(20)
+with encryption
+as begin
+	return (select Name from EmployeesWithDates where Id = @id)
+end
+--nüüd kui tahame näha fn_GetNameById funktsiooni sisu, siis ei saa
+sp_helptext fn_GetNameById
+
+
+create function fn_GetEmployeeNameById(@id int)
+returns nvarchar(20)
+with schemabinding
+as begin
+	return (select Name from EmployeesWithDates where Id = @id)
+end
+--tuleb veateade
+--Cannot schema bind function 'fn_GetEmployeeNameById' 
+--because name 'EmployeesWithDates' is invalid for schema binding. 
+--Names must be in two-part format and an object cannot 
+--reference itself.
+
+--nüüd on korras variant
+create function dbo.fn_GetEmployeeNameById123(@id int)
+returns nvarchar(20)
+with encryption, schemabinding
+as begin
+	return (select Name from dbo.EmployeesWithDates where Id = @id)
+end
+
+--mis on schemabinding?
+--schemabinding seob päringus oleva tabeli ära ja ei luba seda muuta
+--Mis see annab meile?
+--see annab meile jõudluse eelise, sest SQL Server teab, et 
+--see tabel ei muutu veergude osas
+
+--ei saa tabelit kustutada, kui sellel on schemabindinguga funktsioon
+drop table EmployeesWithDates
+
+--temporary tables
+--need on tabelid, mis on loodud ajutiselt ja kustutatakse automaatselt
+--neid on kahte tüüpi: local temporary tables ja global temporary tables
+--#-ga algavad local temporary tables ja 
+--##-ga algavad global temporary tables
+
+create table #PersonDetails(Id int, Name nvarchar(20))
+--kuhu tabel tekkis?
+insert into #PersonDetails values(1, 'Mike')
+insert into #PersonDetails values(2, 'Max')
+insert into #PersonDetails values(3, 'Uhura')
+go
+select * from #PersonDetails
+
+--saame otsida seda objekti ülesse
+select * from sysobjects
+where Name like 'dbo.#PersonDetails______________________________________________________________________________________________________000000000007%'
+
+
+--kustutame tabeli ära
+drop table #PersonDetails
+
+--teeme stored procedure, mis loob 
+--local temporary table-i ja täidab selle andmetega
+create proc spCreateLocalTempTable
+as begin
+create table #PersonDetails(Id int, Name nvarchar(20))
+
+insert into #PersonDetails values(1, 'Mike')
+insert into #PersonDetails values(2, 'Max')
+insert into #PersonDetails values(3, 'Uhura')
+
+select * from #PersonDetails
+end
+---
+exec spCreateLocalTempTable
+
+select * from sysobjects
+where Name like '[dbo].[#A895AD85]%'
+
+---globaalse tabeli loomine
+create table ##GlobalPersonDetails(Id int, Name nvarchar(20))
+--mis on globaalse ja lokaalse tabeli erinevus?
+--globaalse tabeli saab näha ja kasutada kõigis sessioonides,
+--lokaalse tabeli saab näha ja kasutada ainult selles sessioonis, 
+--kus see on loodud
+
+--index
+create table EmployeeWithSalary
+(
+Id int primary key,
+Name nvarchar(25),
+Salary int,
+Gender nvarchar(10)
+)
+
+insert into EmployeeWithSalary values(1, 'Sam', 2500, 'Male')
+insert into EmployeeWithSalary values(2, 'Pam', 6500, 'Female')
+insert into EmployeeWithSalary values(3, 'John', 4500, 'Male')
+insert into EmployeeWithSalary values(4, 'Sara', 5500, 'Female')
+insert into EmployeeWithSalary values(5, 'Todd', 3100, 'Male')
+
+select * from EmployeeWithSalary
+
+
+select * from EmployeeWithSalary
+where Salary > 4000 and Salary < 7000
+
+--loome indeksi, mis asetab palga kahanevasse järjestusse
+create index IX_Employee_Salary
+on EmployeeWithSalary(Salary desc)
+
+create index IX_Employee_Salary123
+on EmployeeWithSalary(Salary)
+where Salary > 4000 and Salary < 7000
+
+SELECT *
+FROM EmployeeWithSalary WITH (INDEX(IX_Employee_Salary123))
+WHERE Salary > 4000 AND Salary < 7000;
+--proovige nüüd pärida tabelit EmployeeWithSalary
+-- ja kasutada index-t IX_Employee_Salary
+select * from EmployeeWithSalary with (index (IX_Employee_Salary))
+
+--indeksi kustutamine
+drop index IX_Employee_Salary123 on EmployeeWithSalary
+drop index EmployeeWithSalary.IX_Employee_Salary
+
+SET STATISTICS PROFILE ON;
+
+SELECT Name, Salary
+FROM EmployeeWithSalary
+WHERE Salary > 1000 AND Salary < 5000;
+
+SET STATISTICS PROFILE OFF;
+---
+SET SHOWPLAN_ALL ON;
+go
+SELECT Name, Salary
+FROM EmployeeWithSalary
+WHERE Salary > 1000 AND Salary < 5000;
+go
+SET SHOWPLAN_ALL OFF;
+go
+
+
+---- indeksi tüübid:
+--1. Klastrites olevad
+--2. Mitte-klastris olevad
+--3. Unikaalsed
+--4. Filtreeritud
+--5. XML
+--6. Täistekst
+--7. Ruumiline
+--8. Veerusäilitav
+--9. Veergude indeksid
+--10. Välja arvatud veergudega indeksid
+
+-- klastris olev indeks määrab ära tabelis oleva füüsilise järjestuse 
+-- ja selle tulemusel saab tabelis olla ainult üks klastris olev indeks
+--kui lisad primaarvõtme, siis luuakse automaatselt klastris olev indeks
+
+create table EmployeeCity
+(
+Id int primary key,
+Name nvarchar(25),
+Salary int,
+Gender nvarchar(10),
+City nvarchar(20)
+)
+
+-- andmete õige järjestuse loovad klastris olevad indeksid 
+-- ja kasutab selleks Id nr-t
+-- põhjus, miks antud juhul kasutab Id-d, tuleneb primaarvõtmest
+insert into EmployeeCity values(3, 'John', 4500, 'Male', 'New York')
+insert into EmployeeCity values(1, 'Sam', 2500, 'Male', 'London')
+insert into EmployeeCity values(4, 'Sara', 5500, 'Female', 'Tokyo')
+insert into EmployeeCity values(5, 'Todd', 3100, 'Male', 'Toronto')
+insert into EmployeeCity values(2, 'Pam', 6500, 'Male', 'Sydney')
+
+SELECT * FROM EmployeeCity
+
+-- klastris olevad indeksid dikteerivad säilitatud andmete järjestuse tabelis 
+-- ja seda saab klastrite puhul olla ainult üks
+CREATE clustered index IX_EmployeeCity_Name
+on EmployeeCity(Name)
+--- annab veateate, et tabelis saab olla ainult üks klastris olev indeks
+--- kui soovid, uut indeksit luua, siis kustuta olemasolev
+
+--- saame luua ainult ühe klastris oleva indeksi tabeli peale
+--- klastris olev indeks on analoogne telefoni nr-le
+--- enne seda päringut kustutasime primaarvõtme indeksi ära
+SELECT * FROM EmployeeCity
+
+--mitte klastris olev indeks
+create nonclustered index IX_EmployeeCity_Name123
+on EmployeeCity(Name)
+
+exec sp_helpindex EmployeeCity
+
+SELECT * FROM EmployeeCity
+
+--- erinevused kahe indeksi vahel
+--- 1. ainult üks klastris olev indeks saab olla tabeli peale, 
+--- mitte-klastris olevaid indekseid saab olla mitu
+--- 2. klastris olevad indeksid on kiiremad kuna indeks peab 
+--- tagasi viitama tabelile
+--- Juhul, kui selekteeritud veerg ei ole olemas indeksis
+--- 3. Klastris olev indeks määratleb ära tabeli ridade slavestusjärjestuse
+--- ja ei nõua kettal lisa ruumi. Samas mitte klastris olevad indeksid on 
+--- salvestatud tabelist eraldi ja nõuab lisa ruumi
+
+create table EmployeeFirstName
+(
+	Id int primary key,
+	FirstName nvarchar(25),
+	LastName nvarchar(25),
+	Salary int,
+	Gender nvarchar(10),
+	City nvarchar(20)
+)
+
+exec sp_helpindex EmployeeFirstName
+
+--sisestame andmed tabelisse ja neid ei saa sisestada
+insert into EmployeeFirstName 
+values
+(1, 'Mike', 'Sandoz', 4500, 'Male', 'New York'),
+(1, 'John', 'Menco', 2500, 'Male', 'London')
+
+--kustutame indeksi ära
+drop index EmployeeFirstName.PK__Employee__3214EC078089B561
+--- kui käivitad ülevalpool oleva koodi, siis tuleb veateade
+--- et SQL server kasutab UNIQUE indeksit jõustamaks väärtuste unikaalsust ja primaarvõtit
+--- koodiga Unikaalseid Indekseid ei saa kustutada, aga käsitsi saab
+
+insert into EmployeeFirstName 
+values
+(1, 'Mike', 'Sandoz', 4500, 'Male', 'New York'),
+(1, 'John', 'Menco', 2500, 'Male', 'London')
+
+create unique nonclustered index IX_Employee_FirstName_FirstName
+on EmployeeFirstName(FirstName, LastName)
+
+insert into EmployeeFirstName 
+values
+(1, 'Mike', 'Sandoz', 4500, 'Male', 'New York'),
+(2, 'John', 'Menco', 2500, 'Male', 'London')
+-- alguses annab veateate, et Mike Sandoz-st on kaks korda
+-- ei saa lisada mitte-klastris olevat indeksit, kui ei ole unikaalseid andmeid
+--- kustutame tabeli ja sisestame andmed uuesti
+
+create table EmployeeFirstName
+(
+	Id int primary key,
+	FirstName nvarchar(25),
+	LastName nvarchar(25),
+	Salary int,
+	Gender nvarchar(10),
+	City nvarchar(20)
+)
+
+insert into EmployeeFirstName 
+values
+(1, 'Mike', 'Sandoz', 4500, 'Male', 'New York'),
+(2, 'John', 'Menco', 2500, 'Male', 'London')
+
+--lisame uue unikaalse piirangu
+alter table EmployeeFirstName
+add constraint UQ_Employee_FirstName_City
+unique nonclustered(City)
+
+insert into EmployeeFirstName 
+values
+(3, 'John', 'Menco', 4500, 'Male', 'London')
+
+--rida 1334
+--tund 8
+--28.04.26
+
