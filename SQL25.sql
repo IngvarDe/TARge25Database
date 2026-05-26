@@ -2448,3 +2448,27 @@ begin
 	print @Counter
 	set @Counter = @Counter + 1
 end
+
+
+select * from Product
+select * from ProductSales
+
+-- võrdleme subquerit ja joini jõudlust
+select Id, Name , Description
+from Product
+where Id in 
+(
+select Product.Id from ProductSales
+)
+-- 3 miljonit rida 13 sekundiga
+
+-- teeme cache puhtaks, et uut päringut ei oleks kuskile vähemällu salvestatud
+checkpoint;
+go
+dbcc DropCleanBuffers;  --puhastab päringu cache-i
+go
+dbcc FreeProcCache; --puhastab protseduuride cache-i
+go
+
+-- teha sama tabeliga, aga JOIN-iga
+
